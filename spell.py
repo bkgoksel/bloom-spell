@@ -12,6 +12,7 @@ class SpellChecker:
     """
 
     vocab: BloomFilterSet
+    vocab_size: int
 
     def __init__(self, vocab_file_path: str, filter_size_bytes: int = None) -> None:
         """
@@ -20,7 +21,12 @@ class SpellChecker:
         :param vocab_file_path: Path to vocab file, should include one word per line
         :param filter_size_bytes: Size of underlying filter in bytes, default value of 1MB used if not specified
         """
+        self.vocab_size = 0
         with open(vocab_file_path, "r") as vocab_file:
+            # First approximate the number of words by dividing the file size by the average word length
+            # This is to avoid reading the entire file just to get the number of words
+            # We need the number of words first to properly optimize our Bloom filter before adding
+            # words to it.
             vocab_file.seek(0, 2)
             file_size = vocab_file.tell()
             num_words = (
@@ -38,9 +44,13 @@ class SpellChecker:
                 )
             for word in vocab_file:
                 self.vocab.add(word.strip())
+                self.vocab_size += 1
 
     def __contains__(self, word: str) -> bool:
         return word in self.vocab
+
+    def __len__(self) -> int:
+        return self.vocab_size
 
     def spell_check(self, text: str) -> List[bool]:
         """
