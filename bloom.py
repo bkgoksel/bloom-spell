@@ -135,7 +135,7 @@ class BloomFilterSet(Container[T]):
         return all(self._check_bit(hash_idx) for hash_idx in hashes)
 
     @property
-    def approximate_size(self) -> int:
+    def size(self) -> int:
         """
         Since Bloom Filers are approximate sized, each `add` call
         increments size by 1, as a result this returns number of times
@@ -148,7 +148,7 @@ class BloomFilterSet(Container[T]):
         return self._num_adds
 
     @property
-    def approximate_false_positive_prob(self) -> float:
+    def false_positive_prob(self) -> float:
         """
         Get the current false positive probability (upper bound)
         Calculates the probability assuming each added element was unique

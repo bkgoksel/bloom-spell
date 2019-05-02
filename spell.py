@@ -23,18 +23,18 @@ class SpellChecker:
         with open(vocab_file_path, "r") as vocab_file:
             vocab_file.seek(0, 2)
             file_size = vocab_file.tell()
-            approximate_num_words = (
+            num_words = (
                 file_size / 8
             )  # Average English word is 8 characters long
             vocab_file.seek(0)
             if filter_size_bytes:
                 self.vocab = BloomFilterSet(
-                    expected_number_of_entries=approximate_num_words,
+                    expected_number_of_entries=num_words,
                     byte_size=filter_size_bytes,
                 )
             else:
                 self.vocab = BloomFilterSet(
-                    expected_number_of_entries=approximate_num_words
+                    expected_number_of_entries=num_words
                 )
             for word in vocab_file:
                 self.vocab.add(word.strip())
@@ -53,10 +53,11 @@ class SpellChecker:
         """
         return [word.lower() not in self.vocab for word in text.split()]
 
+    @property
     def false_positive_prob(self) -> float:
         """
         Returns the approximate probability that any given misspelled word
         will not be caught by the spellchecker. The uncertainty is due to
         the underlying Bloom filter used to store the vocabulary
         """
-        return self.vocab.approximate_false_positive_prob
+        return self.vocab.false_positive_prob
