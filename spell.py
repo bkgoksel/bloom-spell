@@ -11,6 +11,8 @@ class SpellChecker:
     a Bloom filter to catch out-of-dictionary words
     """
 
+    vocab: BloomFilterSet
+
     def __init__(self, vocab_file_path: str, filter_size_bytes: int = None) -> None:
         """
         Creates a new SpellChecker, reading vocabulary from a given file
@@ -18,8 +20,6 @@ class SpellChecker:
         :param vocab_file_path: Path to vocab file, should include one word per line
         :param filter_size_bytes: Size of underlying filter in bytes, default value of 1MB used if not specified
         """
-        vocab: BloomFilterSet
-
         with open(vocab_file_path, "r") as vocab_file:
             vocab_file.seek(0, 2)
             file_size = vocab_file.tell()
@@ -52,3 +52,11 @@ class SpellChecker:
                     the token might be a misspelling
         """
         return [word.lower() not in self.vocab for word in text.split()]
+
+    def false_positive_prob(self) -> float:
+        """
+        Returns the approximate probability that any given misspelled word
+        will not be caught by the spellchecker. The uncertainty is due to
+        the underlying Bloom filter used to store the vocabulary
+        """
+        return self.vocab.approximate_false_positive_prob

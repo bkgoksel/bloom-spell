@@ -1,8 +1,7 @@
 """
 A Python 3.7 implementation of a Set based on a Bloom Filter
 """
-from typing import TypeVar, Container, Tuple, Any, Optional
-import hashlib
+from typing import TypeVar, Container, Tuple, Optional
 import math
 import sys
 
@@ -15,22 +14,21 @@ class BloomFilterSet(Container[T]):
     The BloomFilter Set class
     """
 
-    _storage: bytearray
-    _bit_width: int
-    _num_elems: int
-    _num_hashes: int
-    _word_size: int
-    _right_mask: int
-    _left_mask: int
+    _storage: bytearray  # Actual byte storage for the filter
+    _bit_width: int  # Size of storage in bits
+    _num_adds: int  # Number of times elements were added
+    _num_hashes: int  # Number of hash functions used
+    _word_size: int  # Word size of the underlying interpreter (used for double hashing)
+    _right_mask: int  # Mask for the right half of an expected hash value (used for double hashing)
+    _left_mask: int  # Mask for the left half of an expected hash value (used for double hashing)
 
-    HASH_FUNCTION: Any = hashlib.md5
-    MIN_NUM_HASHES: int = 3
-    MAX_NUM_HASHES: int = 32
-    INITIAL_SIZE: int = 1024 * 1024
+    MIN_NUM_HASHES: int = 3  # Minimum number of hash functions to use when calculating optimal
+    MAX_NUM_HASHES: int = 32  # Maximum number of hash functions to use when calculating optimal
+    DEFAULT_BYTE_SIZE: int = 1024 * 1024  # Default size (in bytes) to use for filter if not specified
 
     def __init__(
         self,
-        byte_size: int = INITIAL_SIZE,
+        byte_size: int = DEFAULT_BYTE_SIZE,
         expected_number_of_entries: Optional[int] = None,
         num_hashes: Optional[int] = None,
     ) -> None:
@@ -54,14 +52,18 @@ class BloomFilterSet(Container[T]):
             )
 
         self._bit_width = byte_size * 8
-        self._num_elems = 0
+        self._num_adds = 0
+        # Only support 64 and 32bit, sys.maxsize returns largest expected hash value
         self._word_size: int = 64 if sys.maxsize > 2 ** 32 else 32
+        # Set all the bits on the right half of word size bits to 1
         self._right_mask = (2 ** (self._word_size // 2)) - 1
+        # Do the same but shift left. Notice the -1 to account for the sign bit
         self._left_mask = ((2 ** ((self._word_size // 2) - 1)) - 1) << (
             self._word_size // 2
         )
-        self._initialize_storage()
+        self._storage = bytearray(self._bit_width // 8)
         if expected_number_of_entries is not None:
+            # Formula for optimal number floor(ln(2)*m/n) from Wikipedia
             self._num_hashes = max(
                 min(
                     math.floor(
@@ -74,23 +76,34 @@ class BloomFilterSet(Container[T]):
         else:
             self._num_hashes = num_hashes
 
-    def _initialize_storage(self) -> None:
-        self._storage = bytearray(self._bit_width // 8)
-
-    def _hash_bit(self, idx: int) -> None:
+    def _set_bit(self, idx: int) -> None:
+        """
+        Taking a bit index idx (offset from right), find the corresponding byte
+        and the corresponding bit in it in our storage and set that bit to 1
+        """
         byte_idx_to_modify = idx // 8
         bit_idx_to_modify = idx % 8
         self._storage[byte_idx_to_modify] |= 1 << bit_idx_to_modify
 
     def _check_bit(self, idx: int) -> bool:
+        """
+        Taking a bit index idx (offset from right), find the corresponding byte
+        and the corresponding bit in it in our storage and check that the bit is 1
+        """
         byte_idx_to_modify = idx // 8
         bit_idx_to_modify = idx % 8
         return bool(self._storage[byte_idx_to_modify] & (1 << bit_idx_to_modify))
 
     def _hash(self, element: T) -> Tuple[int]:
+        """
+        Given an element, compute all the bits that it hashes to in our bit vector
+        """
         full_hash = hash(element)
+        #  Mask out the rightmost half of the bits of the hash value
         left_hash = (full_hash & self._left_mask) >> (self._word_size // 2)
+        #  Mask out the leftmost half of the bits of the hash value
         right_hash = full_hash & self._right_mask
+        #  Refer to Wikipedia for formula for double hashing:
         hashes = (
             (left_hash + hash_idx * right_hash) % self._bit_width
             for hash_idx in range(self._num_hashes)
@@ -101,19 +114,24 @@ class BloomFilterSet(Container[T]):
         """
         Adds an element to the set
         Also incrementes element count by one.
+        :param element: Element to be added
         """
         hashes = self._hash(element)
         for hash_idx in hashes:
-            self._hash_bit(hash_idx)
-        self._num_elems += 1
+            self._set_bit(hash_idx)
+        self._num_adds += 1
 
     def __contains__(self, element: T) -> bool:
         """
         Checks whether an element is in the set.
         May return false positives (ie True for elements not in set)
         Never returns false negatives
+        :param element: Element to check for membership
+        :returns: Bool that if True indicates element may be in the set,
+                if False, the element was definitely never added to the set
         """
         hashes = self._hash(element)
+        #  If all the hashed bits of an element are set, assume it was added
         return all(self._check_bit(hash_idx) for hash_idx in hashes)
 
     @property
@@ -122,15 +140,21 @@ class BloomFilterSet(Container[T]):
         Since Bloom Filers are approximate sized, each `add` call
         increments size by 1, as a result this returns number of times
         `add` was called on the set
+        :returns: Int, number of times any element was added to the set
         """
-        return self._num_elems
+        #  Note: a better approximation of the true size is known, but
+        #  plain number of additions were picked for transparency.
+        #  refer to Wikpedia for the formula for the better true approximation
+        return self._num_adds
 
     @property
     def approximate_false_positive_prob(self) -> float:
         """
-        Returns the current expected false positive probability of the
-        Bloom filter given its parameters.
+        Get the current false positive probability (upper bound)
+        Calculates the probability assuming each added element was unique
+        :returns: Float, probability that the membership check returns a false positive
         """
+        #  Refer to Wikipedia for the formula for the false positive probability calculation
         return (
-            1 - math.e ** ((-1 * self._num_hashes * self._num_elems) / self._bit_width)
+            1 - math.e ** ((-1 * self._num_hashes * self._num_adds) / self._bit_width)
         ) ** self._num_hashes
