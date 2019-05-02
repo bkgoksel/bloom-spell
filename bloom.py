@@ -33,7 +33,9 @@ class BloomFilterSet:
         self._hash_fn = hash_fn
         self._num_hashes = num_hashes
         self._num_elems = 0
-        self._word_size = 64 if sys.maxsize > 2**32 else 32
+        self._word_size: int = 64 if sys.maxsize > 2**32 else 32
+        self._right_mask = (2 ** (self._word_size // 2)) - 1
+        self._left_mask = ((2 ** ((self._word_size // 2) - 1)) - 1) << (self._word_size // 2)
         self._initialize_storage()
 
     def _initialize_storage(self) -> None:
@@ -50,15 +52,11 @@ class BloomFilterSet:
         return bool(self._storage[byte_idx_to_modify] & (1 << bit_idx_to_modify))
 
     def _hash(self, element: str) -> Tuple[int]:
-        big_hash = self._hash_fn(element.encode())
-        hash_half_len = big_hash.digest_size // 2
-        hash_digest = big_hash.digest()
-        first_hash, second_hash = (
-            int.from_bytes(hash_digest[:hash_half_len], "little"),
-            int.from_bytes(hash_digest[hash_half_len:], "little"),
-        )
+        full_hash = hash(element)
+        left_hash = (full_hash & self._left_mask) >> (self._word_size // 2)
+        right_hash = full_hash & self._right_mask
         hashes = (
-            (first_hash + hash_idx * second_hash) % self._bit_width
+            (left_hash + hash_idx * right_hash) % self._bit_width
             for hash_idx in range(self._num_hashes)
         )
         return tuple(hashes)
