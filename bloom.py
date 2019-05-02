@@ -19,23 +19,20 @@ class BloomFilterSet(Container[T]):
     _bit_width: int
     _num_elems: int
     _num_hashes: int
-    _hash_fn: Any
     _word_size: int
     _right_mask: int
     _left_mask: int
 
     HASH_FUNCTION: Any = hashlib.md5
     NUM_HASHES: int = 8
-    INITIAL_SIZE: int = 2 ** 10
+    INITIAL_SIZE: int = 1024
 
     def __init__(
         self,
         bit_width: int = INITIAL_SIZE,
         num_hashes: int = NUM_HASHES,
-        hash_fn: Any = HASH_FUNCTION,
     ) -> None:
         self._bit_width = bit_width
-        self._hash_fn = hash_fn
         self._num_hashes = num_hashes
         self._num_elems = 0
         self._word_size: int = 64 if sys.maxsize > 2 ** 32 else 32
