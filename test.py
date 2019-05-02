@@ -1,8 +1,8 @@
 from bloom import BloomFilterSet
 
-bloom_set = BloomFilterSet()
+bloom_set = BloomFilterSet(expected_number_of_entries=2)
 
-assert len(bloom_set._storage) * 8 == BloomFilterSet.INITIAL_SIZE
+assert len(bloom_set._storage) == BloomFilterSet.INITIAL_SIZE
 assert bloom_set.approximate_size == 0
 
 assert(bloom_set._hash('0') == bloom_set._hash('0'))

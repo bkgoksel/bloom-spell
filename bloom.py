@@ -1,7 +1,7 @@
 """
 A Python 3.7 implementation of a Set based on a Bloom Filter
 """
-from typing import TypeVar, Container, Tuple, Any
+from typing import TypeVar, Container, Tuple, Any, Optional
 import hashlib
 import math
 import sys
@@ -24,16 +24,31 @@ class BloomFilterSet(Container[T]):
     _left_mask: int
 
     HASH_FUNCTION: Any = hashlib.md5
-    NUM_HASHES: int = 8
-    INITIAL_SIZE: int = 1024
+    MAX_NUM_HASHES: int = 32
+    INITIAL_SIZE: int = 1024 * 1024
 
     def __init__(
         self,
-        bit_width: int = INITIAL_SIZE,
-        num_hashes: int = NUM_HASHES,
+        byte_size: int = INITIAL_SIZE,
+        expected_number_of_entries: Optional[int] = None,
+        num_hashes: Optional[int] = None,
     ) -> None:
-        self._bit_width = bit_width
-        self._num_hashes = num_hashes
+        """
+        Creates a new BloomFilterSet. You can either specify the number of
+        hash functions to be used directly or specify the expected number
+        of entries to be put into the bloom filter and have it pick the
+        optimal number of hash functions based on the size and expected
+        load.
+        :param byte_size: Size of the Bloom filter storage in bytes
+        :param expected_number_of_entries: Expected number of entries to be added, optional
+        :param num_hashes: Number of hashes to use for adding elements. Optional, should not be set if expected_number_of_entries is set
+        """
+        if (expected_number_of_entries is None and num_hashes is None):
+            raise ValueError("You must specify either num_hashes or expected_number_of_entries to initialize the Bloom Filter Set")
+        if (expected_number_of_entries is not None and num_hashes is not None):
+            raise ValueError("You must specify only one of num_hashes or expected_number_of_entries to initialize the Bloom Filter Set")
+
+        self._bit_width = byte_size * 8
         self._num_elems = 0
         self._word_size: int = 64 if sys.maxsize > 2 ** 32 else 32
         self._right_mask = (2 ** (self._word_size // 2)) - 1
@@ -41,6 +56,10 @@ class BloomFilterSet(Container[T]):
             self._word_size // 2
         )
         self._initialize_storage()
+        if expected_number_of_entries is not None:
+            self._num_hashes = min(math.floor(math.log(2) * self._bit_width / expected_number_of_entries), self.MAX_NUM_HASHES)
+        else:
+            self._num_hashes = num_hashes
 
     def _initialize_storage(self) -> None:
         self._storage = bytearray(self._bit_width // 8)
