@@ -1,13 +1,16 @@
 """
 A Python 3.7 implementation of a Set based on a Bloom Filter
 """
-from typing import Tuple, Any
+from typing import TypeVar, Container, Tuple, Any
 import hashlib
 import math
 import sys
 
 
-class BloomFilterSet:
+T = TypeVar("T")
+
+
+class BloomFilterSet(Container[T]):
     """
     The BloomFilter Set class
     """
@@ -18,6 +21,8 @@ class BloomFilterSet:
     _num_hashes: int
     _hash_fn: Any
     _word_size: int
+    _right_mask: int
+    _left_mask: int
 
     HASH_FUNCTION: Any = hashlib.md5
     NUM_HASHES: int = 8
@@ -33,9 +38,11 @@ class BloomFilterSet:
         self._hash_fn = hash_fn
         self._num_hashes = num_hashes
         self._num_elems = 0
-        self._word_size: int = 64 if sys.maxsize > 2**32 else 32
+        self._word_size: int = 64 if sys.maxsize > 2 ** 32 else 32
         self._right_mask = (2 ** (self._word_size // 2)) - 1
-        self._left_mask = ((2 ** ((self._word_size // 2) - 1)) - 1) << (self._word_size // 2)
+        self._left_mask = ((2 ** ((self._word_size // 2) - 1)) - 1) << (
+            self._word_size // 2
+        )
         self._initialize_storage()
 
     def _initialize_storage(self) -> None:
@@ -51,7 +58,7 @@ class BloomFilterSet:
         bit_idx_to_modify = idx % 8
         return bool(self._storage[byte_idx_to_modify] & (1 << bit_idx_to_modify))
 
-    def _hash(self, element: str) -> Tuple[int]:
+    def _hash(self, element: T) -> Tuple[int]:
         full_hash = hash(element)
         left_hash = (full_hash & self._left_mask) >> (self._word_size // 2)
         right_hash = full_hash & self._right_mask
@@ -61,7 +68,7 @@ class BloomFilterSet:
         )
         return tuple(hashes)
 
-    def add(self, element: str) -> None:
+    def add(self, element: T) -> None:
         """
         Adds an element to the set
         Also incrementes element count by one.
@@ -71,7 +78,7 @@ class BloomFilterSet:
             self._hash_bit(hash_idx)
         self._num_elems += 1
 
-    def __contains__(self, element: str) -> bool:
+    def __contains__(self, element: T) -> bool:
         """
         Checks whether an element is in the set.
         May return false positives (ie True for elements not in set)
