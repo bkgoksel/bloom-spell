@@ -24,6 +24,7 @@ class BloomFilterSet(Container[T]):
     _left_mask: int
 
     HASH_FUNCTION: Any = hashlib.md5
+    MIN_NUM_HASHES: int = 3
     MAX_NUM_HASHES: int = 32
     INITIAL_SIZE: int = 1024 * 1024
 
@@ -43,10 +44,14 @@ class BloomFilterSet(Container[T]):
         :param expected_number_of_entries: Expected number of entries to be added, optional
         :param num_hashes: Number of hashes to use for adding elements. Optional, should not be set if expected_number_of_entries is set
         """
-        if (expected_number_of_entries is None and num_hashes is None):
-            raise ValueError("You must specify either num_hashes or expected_number_of_entries to initialize the Bloom Filter Set")
-        if (expected_number_of_entries is not None and num_hashes is not None):
-            raise ValueError("You must specify only one of num_hashes or expected_number_of_entries to initialize the Bloom Filter Set")
+        if expected_number_of_entries is None and num_hashes is None:
+            raise ValueError(
+                "You must specify either num_hashes or expected_number_of_entries to initialize the Bloom Filter Set"
+            )
+        if expected_number_of_entries is not None and num_hashes is not None:
+            raise ValueError(
+                "You must specify only one of num_hashes or expected_number_of_entries to initialize the Bloom Filter Set"
+            )
 
         self._bit_width = byte_size * 8
         self._num_elems = 0
@@ -57,7 +62,15 @@ class BloomFilterSet(Container[T]):
         )
         self._initialize_storage()
         if expected_number_of_entries is not None:
-            self._num_hashes = min(math.floor(math.log(2) * self._bit_width / expected_number_of_entries), self.MAX_NUM_HASHES)
+            self._num_hashes = max(
+                min(
+                    math.floor(
+                        math.log(2) * self._bit_width / expected_number_of_entries
+                    ),
+                    self.MAX_NUM_HASHES,
+                ),
+                self.MIN_NUM_HASHES,
+            )
         else:
             self._num_hashes = num_hashes
 

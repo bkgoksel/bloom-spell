@@ -37,3 +37,14 @@ assert 'world' in spell
 result = spell.spell_check('hello world wrold')
 assert result == [False, False, True], result
 print(spell.vocab._num_hashes)
+print(spell.vocab.approximate_false_positive_prob)
+
+spell = SpellChecker('all_of_english.txt', filter_size_bytes=256*1024)
+
+assert 'hello' in spell
+assert 'world' in spell
+
+result = spell.spell_check('hello world wrold')
+print(result)
+print(spell.vocab._num_hashes)
+print(spell.vocab.approximate_false_positive_prob)
